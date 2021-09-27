@@ -1,0 +1,13 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: $CLUSTER_NAME
+  region: $CLUSTER_REGION
+  version: "${K8S_VERSION}"
+nodeGroups:
+  - name: ng-1
+    instanceType: $NODE_SIZE
+    desiredCapacity: $NODE_COUNT
+    ssh:
+      allow: true
+      publicKeyPath: ~/.ssh/id_rsa.pub
