@@ -22,3 +22,4 @@ mkdir -p $CLUSTER_PATH
 
 eksctl create cluster --config-file="${EKS_CONFIG_FILE}" --kubeconfig "$CLUSTER_PATH/kube.config"
 
+export KUBECONFIG="$CLUSTER_PATH/kube.config"
