@@ -12,6 +12,12 @@ C1NAME="${C1NAME:-cluster1}"
 C2NAME="${C2NAME:-cluster2}"
 C3NAME="${C3NAME:-cluster3}"
 
+restart_deploys() {
+    kubectl rollout restart deploy
+    kubectl rollout restart deploy -n istio-system
+    kubectl rollout restart deploy -n istio-ready
+}
+
 # if [[ -z ${C1NAME+z} || -z ${C2NAME+z} || -z ${C3NAME+z} ]]; then
 #     echo "Missing cluster names as input env vars"
 #     exit 1
@@ -69,11 +75,11 @@ do
     helm install istio-ingressgateway manifests/charts/gateways/istio-ingress --namespace istio-system --values /tmp/ingress_values.yaml
     helm install istio-eastwestgateway manifests/charts/gateways/istio-ingress --namespace istio-system --values /tmp/base_values.yaml
 
-    # restart any deployments to get injection
-    kubectl rollout restart deploy
-
     # apply ready script
     kubectl apply -f "$DIR"/ready.yaml
+
+    # restart any deployments to get injection/proxy settings to take effect
+    restart_deploys
 done
 
 for kube in $KUBE1 $KUBE2 $KUBE3
@@ -116,17 +122,15 @@ export KUBECONFIG=$KUBE1
 kubectl apply -f "$DIR"/gw.yaml
 kubectl apply -f /tmp/c2secret.yaml
 kubectl apply -f /tmp/c3secret.yaml
-kubectl rollout restart deploy
-kubectl rollout restart deploy -n istio-system
+restart_deploys
 export KUBECONFIG=$KUBE2
 kubectl apply -f "$DIR"/gw.yaml
 kubectl apply -f /tmp/c1secret.yaml
 kubectl apply -f /tmp/c3secret.yaml
-kubectl rollout restart deploy
-kubectl rollout restart deploy -n istio-system
+restart_deploys
 export KUBECONFIG=$KUBE3
 kubectl apply -f "$DIR"/gw.yaml
 kubectl apply -f /tmp/c1secret.yaml
 kubectl apply -f /tmp/c2secret.yaml
-kubectl rollout restart deploy
-kubectl rollout restart deploy -n istio-system
+restart_deploys
+
