@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-ready
+  labels:
+    istio-injection: enabled
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: ready
+  namespace: istio-ready
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ready
+  namespace: istio-ready
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - ready
+  http:
+  - route:
+    - destination:
+        host: ready.istio-ready.svc.cluster.local
+        port:
+          number: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ready
+  namespace: istio-ready
+  labels:
+    app: ready
+spec:
+  ports:
+  - name: http
+    port: 80
+  selector:
+    app: ready
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ready
+  namespace: istio-ready
+imagePullSecrets:
+- name: aspenmesh-istio-private-pr-pull-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ready
+  namespace: istio-ready
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ready
+  template:
+    metadata:
+      labels:
+        app: ready
+    spec:
+      serviceAccount: ready
+      containers:
+      - image: docker.io/kennethreitz/httpbin
+        imagePullPolicy: IfNotPresent
+        name: ready
+        ports:
+        - containerPort: 80
