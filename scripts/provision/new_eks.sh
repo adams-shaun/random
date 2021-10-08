@@ -20,6 +20,8 @@ EKS_CONFIG_FILE="$CLUSTER_NAME"_eks.yaml
 envsubst < "$DIR"/eks_template.yaml > "$EKS_CONFIG_FILE"
 mkdir -p $CLUSTER_PATH
 
-eksctl create cluster --config-file="${EKS_CONFIG_FILE}" --kubeconfig "$CLUSTER_PATH/kube.config"
+eksctl create cluster \
+    --config-file="${EKS_CONFIG_FILE}" \
+    --kubeconfig "$CLUSTER_PATH/kube.config"
 
 export KUBECONFIG="$CLUSTER_PATH/kube.config"
