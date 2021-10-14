@@ -86,9 +86,9 @@ helm upgrade cert-manager jetstack/cert-manager \
   --values "$DIR/cert-values.yaml" \
   --wait
 
-kubectl apply -f cert-issuer.yaml 
+kubectl apply -f "$DIR/cert-issuer.yaml"
 sleep 30 # TODO: there must be a better way than just waiting
-kubectl apply -f cert.yaml
+envsubst < "$DIR/cert.yaml" | kubectl apply -f -
 sleep 180
 
 # Generate the TLS cert for gateway termination
@@ -129,13 +129,13 @@ kubectl apply -f /tmp/external-istiod-gw.yaml --context="${CTX_EXTERNAL_CLUSTER}
 # Here we add the encoded CA cert into 'caBundle' entry of clientConfig options
 # in the mutating webhook for injection.
 # For more info, see comments here: https://github.com/istio/istio/issues/30899
-kubectl get mutatingwebhookconfiguration/istio-sidecar-injector-external-istiod \
-    -o json \
-    --context="${CTX_REMOTE_CLUSTER}" \
-    > /tmp/wh.json
-export CA_CERT=$(cat server.crt | base64 | tr -d '\n')
-jq --arg CA_CERT "$CA_CERT" '.webhooks = [ .webhooks[] | .clientConfig.caBundle = $CA_CERT]' /tmp/wh.json > /tmp/wh-patched.json
-kubectl apply -f /tmp/wh-patched.json --context="${CTX_REMOTE_CLUSTER}"
+# kubectl get mutatingwebhookconfiguration/istio-sidecar-injector-external-istiod \
+#     -o json \
+#     --context="${CTX_REMOTE_CLUSTER}" \
+#     > /tmp/wh.json
+# export CA_CERT=$(cat server.crt | base64 | tr -d '\n')
+# jq --arg CA_CERT "$CA_CERT" '.webhooks = [ .webhooks[] | .clientConfig.caBundle = $CA_CERT]' /tmp/wh.json > /tmp/wh-patched.json
+# kubectl apply -f /tmp/wh-patched.json --context="${CTX_REMOTE_CLUSTER}"
 
 # The above allows the injection to proceed, but the proxy does not trust
 # the remote istiod.
@@ -176,13 +176,14 @@ kubectl label --context="${CTX_REMOTE_CLUSTER}" namespace sample istio-injection
 kubectl apply -f samples/helloworld/helloworld.yaml -l service=helloworld -n sample --context="${CTX_REMOTE_CLUSTER}"
 kubectl apply -f samples/helloworld/helloworld.yaml -l version=v1 -n sample --context="${CTX_REMOTE_CLUSTER}"
 kubectl apply -f samples/sleep/sleep.yaml -n sample --context="${CTX_REMOTE_CLUSTER}"
+kubectl apply -f samples/helloworld/helloworld-gateway.yaml -n sample --context="${CTX_REMOTE_CLUSTER}"
 
 # Enable gateways
-istioctl install -f istio-ingressgateway.yaml --context="${CTX_REMOTE_CLUSTER}" -y
-# IMPORTANT: This also needs to be patched to have root CA cert
+istioctl install -f "$DIR/istio-ingressgateway.yaml" --context="${CTX_REMOTE_CLUSTER}" -y
+kubectl create ns external-istiod --context="${CTX_REMOTE_CLUSTER}"
 
 # Register the second cluster
-envsubst < second-config-cluster.yaml > /tmp/second-config-cluster.yaml
+envsubst < "$DIR/second-config-cluster.yaml" > /tmp/second-config-cluster.yaml
 istioctl manifest generate -f /tmp/second-config-cluster.yaml | kubectl apply --context="${CTX_SECOND_CLUSTER}" -f -
 istioctl x create-remote-secret \
   --context="${CTX_SECOND_CLUSTER}" \
@@ -191,6 +192,7 @@ istioctl x create-remote-secret \
   --namespace=external-istiod \
   --create-service-account=false | \
   kubectl apply -f - --context="${CTX_REMOTE_CLUSTER}"
+kubectl create ns external-istiod --context="${CTX_SECOND_CLUSTER}"
 # interesting read here: https://github.com/istio/istio/issues/31946
 
 # Setup east-west gateways
@@ -205,19 +207,6 @@ samples/multicluster/gen-eastwest-gateway.sh \
 istioctl manifest generate -f eastwest-gateway-2.yaml \
     --set values.global.istioNamespace=external-istiod | \
     kubectl apply --context="${CTX_SECOND_CLUSTER}" -f -
-
-kubectl --context="${CTX_REMOTE_CLUSTER}" apply -n external-istiod -f \
-    samples/multicluster/expose-services.yaml
-
-# Repeat process in 2nd cluster to patch mutating webhook config
-# also, need to edit ca cert mounts on all proxy objects.
-kubectl get mutatingwebhookconfiguration/istio-sidecar-injector-external-istiod \
-    -o json \
-    --context="${CTX_SECOND_CLUSTER}" \
-    > /tmp/wh.json
-export CA_CERT=$(cat server.crt | base64 | tr -d '\n')
-jq --arg CA_CERT "$CA_CERT" '.webhooks = [ .webhooks[] | .clientConfig.caBundle = $CA_CERT]' /tmp/wh.json > /tmp/wh-patched.json
-kubectl apply -f /tmp/wh-patched.json --context="${CTX_SECOND_CLUSTER}"
 
 # Next we need to patch the east west gateway external IPs (similar to multicluster)
 EW_HOSTNAME1=$(kubectl get service istio-eastwestgateway \
@@ -238,16 +227,12 @@ kubectl patch svc -n external-istiod istio-eastwestgateway \
     --context="${CTX_SECOND_CLUSTER}" \
     -p "{\"spec\":{\"externalIPs\": [\"$LB_IP\"]}}"
 
+kubectl --context="${CTX_REMOTE_CLUSTER}" apply -n external-istiod -f \
+    samples/multicluster/expose-services.yaml
+
 # Validation
 kubectl create --context="${CTX_SECOND_CLUSTER}" namespace sample
 kubectl label --context="${CTX_SECOND_CLUSTER}" namespace sample istio-injection=enabled
 kubectl apply -f samples/helloworld/helloworld.yaml -l service=helloworld -n sample --context="${CTX_SECOND_CLUSTER}"
 kubectl apply -f samples/helloworld/helloworld.yaml -l version=v2 -n sample --context="${CTX_SECOND_CLUSTER}"
 kubectl apply -f samples/sleep/sleep.yaml -n sample --context="${CTX_SECOND_CLUSTER}"
-
-# Issues
-
-# sometimes the external cluster can't find the host cp.shaun.dev.twistio.io, no idea why
-# cert sharing issues still unsolved.  remote cluster injection doesn't work
-# interesting note: external-dns will crash when it is configured to look for 
-# istio-related APi objects, but the CRDs do not exist.
