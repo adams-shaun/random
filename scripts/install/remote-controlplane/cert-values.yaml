@@ -1,0 +1,12 @@
+serviceAccount:
+  create: false
+  name: cert-manager
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::715707337212:role/eksctl-shaun-ext-addon-iamserviceaccount-cer-Role1-17OZUQ0Q4YD6B
+
+installCRDs: true
+
+# the securityContext is required, so the pod can access files required to assume the IAM role
+securityContext:
+  enabled: true
+  fsGroup: 1001

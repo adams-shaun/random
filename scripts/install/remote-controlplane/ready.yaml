@@ -20,6 +20,12 @@ spec:
       protocol: HTTP
     hosts:
     - ready.$DNS_DOMAIN
+  # - port:
+  #     number: 443
+  #     name: https
+  #     protocol: TLS
+  #   hosts:
+  #   - ready.$DNS_DOMAIN
 ---
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
@@ -32,6 +38,14 @@ spec:
   gateways:
   - ready
   http:
+  # - match:
+  #   - uri:
+  #       prefix: /.well-known/acme-challenge/Agis6DY7WAgnM-_QSdH0xV7Z-XrGCthdNRujI4VcRTM
+  #   route:
+  #   - destination:
+  #       host: cm-acme-http-solver-28kcz.istio-system.svc.cluster.local
+  #       port:
+  #         number: 8089
   - route:
     - destination:
         host: ready.istio-ready.svc.cluster.local

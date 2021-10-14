@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: $SSL_SECRET_NAME
+  namespace: istio-system
+spec:
+  secretName: $SSL_SECRET_NAME
+  issuerRef:
+    name: letsencrypt
+    kind: ClusterIssuer
+  dnsNames:
+  - "$EXTERNAL_ISTIOD_ADDR"
