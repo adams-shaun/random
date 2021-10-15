@@ -71,7 +71,7 @@ export EXTERNAL_ISTIOD_ADDR="cp.${DNS_DOMAIN}"
 eksctl create iamserviceaccount \
     --name cert-manager \
     --namespace cert-manager \
-    --cluster shaun-ext \
+    --cluster "${EXTERNAL_CLUSTER_NAME}" \
     --attach-policy-arn "arn:aws:iam::715707337212:policy/cert-manager-policy" \
     --approve \
     --override-existing-serviceaccounts
