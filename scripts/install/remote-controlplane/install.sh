@@ -4,7 +4,6 @@ set -xeuEo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 
 # FOLLOWING DOCS FROM HERE: https://istio.io/latest/docs/setup/install/external-controlplane/
-
 # This script uses kubectl contexts, be sure to set KUBECONFIG accordingly
 # KUBECONFIG=<kube1path>:<kube2path>:...
 # kubectl config get-contexts 
@@ -19,6 +18,21 @@ if [[ -z ${DNS_DOMAIN+z} ]]; then
     exit 1
 fi
 
+function wait_gateway() {
+    # AWS takes some time to for route53 records to propagate
+    GW_HOSTNAME=$1
+    echo "Waiting for gateway $GW_HOSTNAME to come online."
+    while true; do
+        STATUS2=$(curl --silent \
+            --output /dev/null \
+            --write-out "%{http_code}\n" \
+            "http://$GW_HOSTNAME:15021/healthz/ready" || true)
+        if [[ $STATUS2 == 200 ]]; then
+            break
+        fi
+        sleep 5
+    done
+}
 # export CTX_EXTERNAL_CLUSTER="s.adams@f5.com@shaun-ext.us-west-2.eksctl.io"
 # export CTX_REMOTE_CLUSTER="s.adams@f5.com@shaun-remote.us-west-2.eksctl.io"
 # export CTX_SECOND_CLUSTER="s.adams@f5.com@shaun-remote-2.us-west-2.eksctl.io"
@@ -50,17 +64,7 @@ GW_HOSTNAME=$(kubectl get service istio-ingressgateway \
     -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 
 # AWS takes some time to for route53 records to propagate
-echo "Waiting for ingress gateway to come online."
-while true; do
-    STATUS2=$(curl --silent \
-        --output /dev/null \
-        --write-out "%{http_code}\n" \
-        "http://$GW_HOSTNAME:15021/healthz/ready" || true)
-    if [[ $STATUS2 == 200 ]]; then
-        break
-    fi
-    sleep 5
-done
+wait_gateway "$GW_HOSTNAME"
 
 # SSL_SECRET_NAME is used for termination of requests to istiod at the gateway
 export SSL_SECRET_NAME=gw-cert
@@ -183,6 +187,7 @@ istioctl install -f "$DIR/istio-ingressgateway.yaml" --context="${CTX_REMOTE_CLU
 kubectl create ns external-istiod --context="${CTX_REMOTE_CLUSTER}"
 
 # Register the second cluster
+kubectl create ns external-istiod --context="${CTX_SECOND_CLUSTER}"
 envsubst < "$DIR/second-config-cluster.yaml" > /tmp/second-config-cluster.yaml
 istioctl manifest generate -f /tmp/second-config-cluster.yaml | kubectl apply --context="${CTX_SECOND_CLUSTER}" -f -
 istioctl x create-remote-secret \
@@ -192,7 +197,6 @@ istioctl x create-remote-secret \
   --namespace=external-istiod \
   --create-service-account=false | \
   kubectl apply -f - --context="${CTX_REMOTE_CLUSTER}"
-kubectl create ns external-istiod --context="${CTX_SECOND_CLUSTER}"
 # interesting read here: https://github.com/istio/istio/issues/31946
 
 # Setup east-west gateways
@@ -217,6 +221,9 @@ EW_HOSTNAME2=$(kubectl get service istio-eastwestgateway \
     --namespace external-istiod \
     --context="${CTX_SECOND_CLUSTER}" \
     -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+wait_gateway "$EW_HOSTNAME1"
+wait_gateway "$EW_HOSTNAME2"
 
 LB_IP=$(nslookup "$EW_HOSTNAME1" | grep -E -o "([0-9]{1,3}[\.]){3}[0-9]{1,3}" | tail -1)
 kubectl patch svc -n external-istiod istio-eastwestgateway \
