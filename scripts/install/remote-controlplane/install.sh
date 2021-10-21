@@ -66,9 +66,11 @@ GW_HOSTNAME=$(kubectl get service istio-ingressgateway \
 # AWS takes some time to for route53 records to propagate
 wait_gateway "$GW_HOSTNAME"
 
+read -p "Ensure external cluster gateway is online. Press any key to resume ..."
+
 # SSL_SECRET_NAME is used for termination of requests to istiod at the gateway
 export SSL_SECRET_NAME=gw-cert
-export EXTERNAL_ISTIOD_ADDR="cp.${DNS_DOMAIN}"
+export EXTERNAL_ISTIOD_ADDR="cplane.${DNS_DOMAIN}"
 
 # we need to install cert-manager to generate the TLS cert
 # policy is pre-made according to the docs
@@ -91,9 +93,9 @@ helm upgrade cert-manager jetstack/cert-manager \
   --wait
 
 kubectl apply -f "$DIR/cert-issuer.yaml"
-sleep 30 # TODO: there must be a better way than just waiting
 envsubst < "$DIR/cert.yaml" | kubectl apply -f -
-sleep 180
+
+read -p "Ensure gw-cert secret has been created. Press any key to resume ..."
 
 # Generate the TLS cert for gateway termination
 # openssl genrsa -out ca.key 2048
@@ -182,9 +184,20 @@ kubectl apply -f samples/helloworld/helloworld.yaml -l version=v1 -n sample --co
 kubectl apply -f samples/sleep/sleep.yaml -n sample --context="${CTX_REMOTE_CLUSTER}"
 kubectl apply -f samples/helloworld/helloworld-gateway.yaml -n sample --context="${CTX_REMOTE_CLUSTER}"
 
+read -p "Ensure sample pods are online (DNS resolution works). Press [enter] to continue..."
+
 # Enable gateways
+# It is possible that the DNS lookup of cp.DNS_DOMAIN fails and the gateway pod doesn't come up.
+# If this happens, we must wait for the DNS to resolve from the hosting node.
 istioctl install -f "$DIR/istio-ingressgateway.yaml" --context="${CTX_REMOTE_CLUSTER}" -y
-kubectl create ns external-istiod --context="${CTX_REMOTE_CLUSTER}"
+# kubectl create ns external-istiod --context="${CTX_REMOTE_CLUSTER}"
+
+REMOTE_INGRESS_HOSTNAME=$(kubectl get service istio-ingressgateway \
+    --namespace istio-system \
+    --context="${CTX_EXTERNAL_CLUSTER}" \
+    -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+wait_gateway "$REMOTE_INGRESS_HOSTNAME"
+read -p "Ensure ingress is online. Press any key to resume ..."
 
 # Register the second cluster
 kubectl create ns external-istiod --context="${CTX_SECOND_CLUSTER}"
@@ -201,16 +214,18 @@ istioctl x create-remote-secret \
 
 # Setup east-west gateways
 samples/multicluster/gen-eastwest-gateway.sh \
-    --mesh mesh1 --cluster "${REMOTE_CLUSTER_NAME}" --network network1 > eastwest-gateway-1.yaml
-istioctl manifest generate -f eastwest-gateway-1.yaml \
+    --mesh mesh1 --cluster "${REMOTE_CLUSTER_NAME}" --network network1 > /tmp/eastwest-gateway-1.yaml
+istioctl manifest generate -f /tmp/eastwest-gateway-1.yaml \
     --set values.global.istioNamespace=external-istiod | \
     kubectl apply --context="${CTX_REMOTE_CLUSTER}" -f -
 
 samples/multicluster/gen-eastwest-gateway.sh \
-    --mesh mesh1 --cluster "${SECOND_CLUSTER_NAME}" --network network2 > eastwest-gateway-2.yaml
-istioctl manifest generate -f eastwest-gateway-2.yaml \
+    --mesh mesh1 --cluster "${SECOND_CLUSTER_NAME}" --network network2 > /tmp/eastwest-gateway-2.yaml
+istioctl manifest generate -f /tmp/eastwest-gateway-2.yaml \
     --set values.global.istioNamespace=external-istiod | \
     kubectl apply --context="${CTX_SECOND_CLUSTER}" -f -
+
+read -p "Ensure east-west gateways are online. Press any key to resume ..."
 
 # Next we need to patch the east west gateway external IPs (similar to multicluster)
 EW_HOSTNAME1=$(kubectl get service istio-eastwestgateway \
