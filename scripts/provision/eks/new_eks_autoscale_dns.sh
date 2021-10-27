@@ -38,13 +38,6 @@ eksctl create cluster \
   --with-oidc \
   --kubeconfig="$KUBECONFIG"
 
-# aws cloudformation describe-stacks --stack-name "eksctl-$CLUSTER_NAME-cluster" \
-#   | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="VPC") | .OutputValue' > vpc-id.value
-
-# aws cloudformation describe-stacks --stack-name "eksctl-$CLUSTER_NAME-cluster" \
-#   | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="SubnetsPublic") | .OutputValue' \
-#   | cut -d , -f 1 > public-subnet-id.value
-
 eksctl create iamserviceaccount \
   --cluster="$CLUSTER_NAME" \
   --namespace=kube-system \
@@ -94,14 +87,4 @@ if [[ -n ${DNS_DOMAIN} ]]; then
   envsubst < "$DIR"/external-dns.yaml > /tmp/"$CLUSTER_NAME"-external-dns.yaml
   kubectl apply --kubeconfig=$KUBECONFIG -f /tmp/"$CLUSTER_NAME"-external-dns.yaml
   kubectl wait --for=condition=available --timeout=10s deployments external-dns -n external-dns
-#   kubectl patch --kubeconfig=$KUBECONFIG deployment external-dns --namespace external-dns \
-#     --type=json -p="[{\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/args/4\", \"value\": \"--domain-filter=${DNS_DOMAIN}\" }]"
-
-#   kubectl patch --kubeconfig=$KUBECONFIG deployment external-dns --namespace external-dns \
-#     --type=json -p="[{\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/args/8\", \"value\": \"--txt-owner-id=$CLUSTER_NAME\" }]"
 fi
-
-# kubectl apply --kubeconfig=$KUBECONFIG -f engineering-notes/perf-testing/deployments/controlplane-gateway.yaml
-# kubectl apply --kubeconfig=$KUBECONFIG -f engineering-notes/perf-testing/deployments/metrics-collector-gateway.yaml
-# kubectl apply --kubeconfig=$KUBECONFIG -f engineering-notes/perf-testing/deployments/grafana-am.yaml
-# kubectl apply --kubeconfig=$KUBECONFIG -f engineering-notes/perf-testing/deployments/grafana-gateway.yaml
