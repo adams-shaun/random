@@ -1,0 +1,20 @@
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: httpbin
+  namespace : default
+spec:
+  hosts:
+  - httpbin.org
+  location: MESH_EXTERNAL
+  ports:
+  - number: 80
+    name: http
+    protocol: HTTP
+  - number: 443
+    name: https
+    protocol: TLS
+  resolution: STATIC
+  endpoints:
+  - address: 18.215.122.215
+  - address: 72.44.59.17
