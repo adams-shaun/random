@@ -1,0 +1,6 @@
+apiVersion: networking.aspenmesh.io/v1
+kind: ServiceEntry
+metadata:
+  name: serviceentry-sample
+spec:
+  # TODO(user): Add fields here

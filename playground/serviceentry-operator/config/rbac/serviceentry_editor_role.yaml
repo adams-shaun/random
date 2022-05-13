@@ -1,0 +1,24 @@
+# permissions for end users to edit serviceentries.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: serviceentry-editor-role
+rules:
+- apiGroups:
+  - networking.aspenmesh.io
+  resources:
+  - serviceentries
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.aspenmesh.io
+  resources:
+  - serviceentries/status
+  verbs:
+  - get

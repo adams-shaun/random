@@ -1,0 +1,16 @@
+apiVersion: networking.aspenmesh.io/v1
+kind: ServiceEntry
+metadata:
+  name: external-svc-mongocluster
+spec:
+  hosts:
+  - mymongodb.somedomain # not used
+  ports:
+  - number: 27018
+    name: mongodb
+    protocol: MONGO
+  location: 0
+  resolution: 0
+  endpoints:
+  - address: 2.2.2.2
+  - address: 3.3.3.3

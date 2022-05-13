@@ -1,0 +1,16 @@
+domain: aspenmesh.io
+layout:
+- go.kubebuilder.io/v3
+projectName: serviceentry-operator
+repo: github.com/aspenmesh/random/playground/serviceentry-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: aspenmesh.io
+  group: networking
+  kind: ServiceEntry
+  path: github.com/aspenmesh/random/playground/serviceentry-operator/api/v1
+  version: v1
+version: "3"
